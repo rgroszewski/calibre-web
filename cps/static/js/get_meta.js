@@ -7,6 +7,7 @@
 /* global _, i18nMsg, tinymce */
 var dbResults = [];
 var ggResults = [];
+var lcResults = [];
 
 $(function () {
     var msg = i18nMsg;
@@ -20,6 +21,9 @@ $(function () {
     var ggSearch = "/books/v1/volumes";
     // var gg_get_info = "/books/v1/volumes/";
     var ggDone = false;
+
+    var lcSearch = "/provider/wrapper/lubimyczytac";
+    var lcDone = false;
 
     var showFlag = 0;
 
@@ -44,8 +48,8 @@ $(function () {
         if (showFlag === 1) {
             $("#meta-info").html("<ul id=\"book-list\" class=\"media-list\"></ul>");
         }
-        if (ggDone && dbDone) {
-            if (!ggResults && !dbResults) {
+        if (ggDone && dbDone && lcDone) {
+            if (!ggResults && !dbResults && !lcResults) {
                 $("#meta-info").html("<p class=\"text-danger\">" + msg.no_result + "</p>");
                 return;
             }
@@ -116,6 +120,37 @@ $(function () {
             });
             dbDone = false;
         }
+        if (lcDone && lcResults.length > 0) {
+            lcResults.forEach(function(result) {
+                var book = {
+                    id: result.id,
+                    title: result.name,
+                    authors: result.authors || [],
+                    description: result.description || "",
+                    publisher: result.publisher || "",
+                    publishedDate: result.publishedDate || "",
+                    tags: [] || [],
+                    rating: result.rating || 0,
+                    cover: result.cover ?
+                        result.cover :
+                        "/static/generic_cover.jpg",
+                    url: result.url,
+                    source: {
+                        id: "lubimyczytac",
+                        description: "Lubimy czytac",
+                        url: "http://lubimyczytac.pl/"
+                    }
+                };
+
+                var $book = $(templates.bookResult(book));
+                $book.find("img").on("click", function () {
+                    populateForm(book);
+                });
+
+                $("#book-list").append($book);
+            });
+            lcDone = false;
+        }
     }
 
     function ggSearchBook (title) {
@@ -155,6 +190,25 @@ $(function () {
         });
     }
 
+    function lcSearchBook (title) {
+        $.ajax({
+            url: window.location.protocol+"//"+window.location.hostname+":"+window.location.port + lcSearch + "?title=" + title.replace(/\s+/gm, "+"),
+            type: "GET",
+            dataType: "json",
+            success: function success(data) {
+                lcResults = data;
+            },
+            error: function error() {
+                $("#meta-info").html("<p class=\"text-danger\">" + msg.search_error + "!</p>");
+            },            
+            complete: function complete() {
+                lcDone = true;
+                showResult();
+                $("#show-lubimyczytac").trigger("change");
+            }
+        });
+    }
+
     function doSearch (keyword) {
         showFlag = 0;
         $("#meta-info").text(msg.loading);
@@ -162,6 +216,7 @@ $(function () {
         if (keyword) {
             dbSearchBook(keyword);
             ggSearchBook(keyword);
+            lcSearchBook(keyword);
         }
     }
 
