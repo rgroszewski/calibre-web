@@ -3947,3 +3947,47 @@ def convert_bookformat(book_id):
     else:
         flash(_(u"There was an error converting this book: %(res)s", res=rtn), category="error")
     return redirect(request.environ["HTTP_REFERER"])
+
+@app.route("/provider/wrapper/lubimyczytac", methods=['GET'])
+@login_required_if_no_ano
+def get_lubimyczytac_books():
+    results = []
+    if request.method == "GET":
+        searchResult = requests.get('http://lubimyczytac.pl/searcher/getsuggestions', {'phrase':request.args.get('title')})
+
+        books = searchResult.json()
+        if (not books is None):
+            if isinstance(books, dict):
+                books = books.values()
+            for book in books:
+                if (book['category']=='book'):
+                    pageDetails = requests.get(book['url'])
+                    soup = BeautifulSoup(pageDetails.text, 'html.parser')
+                    descriptionTag = soup.find('div', attrs={'id':'sBookDescriptionLong'})
+                    if (not descriptionTag):
+                        descriptionTag = soup.find('span', attrs={'id':'sBookDescriptionShort'})
+                        if (not descriptionTag):
+                            descriptionTag = soup.find('p', attrs={'class':'description'})
+                    description = descriptionTag.text
+                    title = soup.find('h1', attrs={'itemprop':'name'}).text
+                    author = soup.find('span', attrs={'itemprop':'author'})
+                    cover = soup.find('img', attrs={'itemprop':'image'})
+                    authors = SortedSet()
+                    for authorspan in soup.find_all('span', attrs={'itemprop':'author'}):
+                        for author in authorspan.find_all('a', attrs={'itemprop':'name'}):
+                            authors.add(author.text)
+                    publisher = soup.select('a[href*=http://lubimyczytac.pl/wydawnictwo]')[0].text
+                    rating = '%.2f' % (float(soup.find('span', attrs={'id':'rating-value'}).text.replace(',','.'))/2.0)
+
+                    result = {}            
+                    result['id'] = book['id']
+                    result['name'] = title
+                    result['description'] = description
+                    result['authors'] = list(authors)
+                    result['cover'] = cover['src']
+                    result['url'] = book['url']
+                    result['publisher'] = publisher
+                    result['rating'] = rating
+                    result['publishedDate'] = ""
+                    results.append(result)
+    return json.dumps(results)
